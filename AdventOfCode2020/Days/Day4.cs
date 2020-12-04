@@ -8,6 +8,9 @@ namespace AdventOfCode2020.Days
 {
     public class Day4 : IDay
     {
+        private static readonly string[] RequiredFields = { "byr", "iyr", "eyr", "hgt", "hcl", "ecl", "pid" };
+        private static readonly string[] OptionalFields = { "cid" };
+
         public string Solve()
         {
             var inputRaw = EmbeddedResource.ReadInput("InputDay4.txt");
@@ -24,9 +27,7 @@ namespace AdventOfCode2020.Days
         {
             var passports = ParsePassports(input);
 
-            var validator = new PassportValidator(
-                new string[] { "byr", "iyr", "eyr", "hgt", "hcl", "ecl", "pid" },
-                new string[] { "cid" });
+            var validator = new PassportValidator(RequiredFields, OptionalFields);
 
             return passports.Count(x => validator.IsValid(x)).ToString();
         }
@@ -35,12 +36,7 @@ namespace AdventOfCode2020.Days
         {
             var passports = ParsePassports(input);
 
-            var validationRules = CreateValidationRules();
-
-            var validator = new PassportValidator(
-                new string[] { "byr", "iyr", "eyr", "hgt", "hcl", "ecl", "pid" },
-                new string[] { "cid" },
-                validationRules);
+            var validator = new PassportValidator(RequiredFields, OptionalFields, CreateValidationRules());
 
             return passports.Count(x => validator.IsValid(x)).ToString();
         }
@@ -82,7 +78,7 @@ namespace AdventOfCode2020.Days
                 pid (Passport ID) - a nine-digit number, including leading zeroes.
                 cid (Country ID) - ignored, missing or not.
             */
-            var validationRules = new Dictionary<string, Func<string, bool>>
+            return new Dictionary<string, Func<string, bool>>
             {
                 { "byr", x => { return int.TryParse(x, out int birthYear) && birthYear >= 1920 && birthYear <= 2002; } },
                 { "iyr", x => { return int.TryParse(x, out int issueYear) && issueYear >= 2010 && issueYear <= 2020; } },
@@ -107,82 +103,67 @@ namespace AdventOfCode2020.Days
                 { "ecl", x => { return (new string[] { "amb", "blu", "brn", "gry", "grn", "hzl", "oth" }).Count(color => color.Equals(x)) == 1; } },
                 { "pid", x => { return int.TryParse(x, out int _) && x.Length == 9; } }
             };
-
-            return validationRules;
-        }
-    }
-
-    public record PassportValidator(string[] RequiredFields, string[] OptionalFields, Dictionary<string, Func<string, bool>> ValidationRules = null)
-    {
-        public bool IsValid(Passport passport)
-        {
-            return
-                ContainsRequiredFields(passport) &&
-                FollowsRules(passport);
         }
 
-        public bool ContainsRequiredFields(Passport passport)
+        private record PassportValidator(
+            string[] RequiredFields,
+            string[] OptionalFields,
+            Dictionary<string, Func<string, bool>> ValidationRules = null)
         {
-            foreach (var field in RequiredFields)
+            public bool IsValid(Passport passport)
             {
-                if (!passport.FieldExists(field))
+                return
+                    ContainsRequiredFields(passport) &&
+                    FollowsRules(passport);
+            }
+
+            public bool ContainsRequiredFields(Passport passport)
+            {
+                return RequiredFields.All(x => passport.FieldExists(x));
+            }
+
+            public bool FollowsRules(Passport passport)
+            {
+                return
+                    ValidationRules == null ||
+                    ValidationRules.All(rule => rule.Value(passport.Fields[rule.Key]));
+            }
+        }
+
+        private class Passport
+        {
+            public Dictionary<string, string> Fields { get; set; } = new();
+
+            private readonly StringBuilder rawPassport = new();
+
+            public Passport AddPart(string passportPart)
+            {
+                rawPassport.Append($" {passportPart}");
+                return this;
+            }
+
+            public Passport Build()
+            {
+                ParsePassport(rawPassport.ToString());
+                return this;
+            }
+
+            public bool FieldExists(string field)
+            {
+                return Fields.ContainsKey(field);
+            }
+
+            private void ParsePassport(string rawPassport)
+            {
+                var fields = rawPassport
+                    .Replace("\r\n", " ")
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var field in fields)
                 {
-                    return false;
+                    var fieldValue = field.Split(':');
+                    Fields.Add(fieldValue[0], fieldValue[1]);
                 }
-            }
-            return true;
-        }
-
-        public bool FollowsRules(Passport passport)
-        {
-            if (ValidationRules == null)
-            {
-                return true;
-            }
-            foreach (var rule in ValidationRules)
-            {
-                var fieldValue = passport.Fields[rule.Key];
-                if (!rule.Value(fieldValue))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-
-    public class Passport
-    {
-        public Dictionary<string, string> Fields { get; set; } = new();
-
-        private readonly StringBuilder rawPassport = new();
-
-        public Passport AddPart(string passportPart)
-        {
-            rawPassport.Append($" {passportPart}");
-            return this;
-        }
-
-        public Passport Build()
-        {
-            ParsePassport(rawPassport.ToString());
-            return this;
-        }
-
-        public bool FieldExists(string field)
-        {
-            return Fields.ContainsKey(field);
-        }
-
-        private void ParsePassport(string rawPassport)
-        {
-            var cleaned = rawPassport.Replace("\r\n", " ");
-            var fields = cleaned.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (var field in fields)
-            {
-                var fieldValue = field.Split(':');
-                Fields.Add(fieldValue[0], fieldValue[1]);
             }
         }
     }
