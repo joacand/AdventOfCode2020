@@ -1,7 +1,7 @@
 ﻿using AdventOfCode2020.Days;
 using System;
 
-IDay day = new Day10();
+IDay day = new Day11();
 
 Console.WriteLine(day.Solve());
 Console.ReadLine();
