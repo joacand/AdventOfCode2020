@@ -29,7 +29,7 @@ namespace AdventOfCode2020.Days
         private static string SolvePart2(List<string> input)
         {
             (var player1, var player2) = ParseInput(input);
-            (var _, var score) = Game.PlayRecursiveGame(player1, player2, Game.NewPreviousDecks);
+            (var _, var score) = Game.PlayRecursiveGame(player1, player2, Game.NewPreviousDeckHashes);
 
             return score.ToString();
         }
@@ -37,7 +37,7 @@ namespace AdventOfCode2020.Days
         private class Game
         {
             // Previous deck-holder initialized with player 1 and 2
-            public static Dictionary<int, List<Queue<int>>> NewPreviousDecks => new() { { 1, new() }, { 2, new() } };
+            public static Dictionary<int, List<int>> NewPreviousDeckHashes => new() { { 1, new() }, { 2, new() } };
 
             public static long PlayCombatGame(Queue<int> player1, Queue<int> player2)
             {
@@ -63,18 +63,16 @@ namespace AdventOfCode2020.Days
                 return CalculateScore(winner);
             }
 
-            public static (int, long) PlayRecursiveGame(Queue<int> player1, Queue<int> player2, Dictionary<int, List<Queue<int>>> previousRoundDecks)
+            public static (int, long) PlayRecursiveGame(Queue<int> player1, Queue<int> player2, IDictionary<int, List<int>> previousRoundDecks)
             {
                 while (player1.Count > 0 && player2.Count > 0)
                 {
                     // Recursion rule
-                    if (DeckHasBeenPlayedPreviously(1, player1, previousRoundDecks) ||
-                        DeckHasBeenPlayedPreviously(2, player2, previousRoundDecks))
+                    if (DeckHasBeenPlayedPreviously(1, player1.GetHash(), previousRoundDecks) ||
+                        DeckHasBeenPlayedPreviously(2, player2.GetHash(), previousRoundDecks))
                     {
                         return (1, CalculateScore(player1));
                     }
-                    previousRoundDecks[1].Add(new Queue<int>(player1));
-                    previousRoundDecks[2].Add(new Queue<int>(player2));
 
                     var p1card = player1.Dequeue();
                     var p2card = player2.Dequeue();
@@ -86,7 +84,7 @@ namespace AdventOfCode2020.Days
                         var subGameDeckP1 = new Queue<int>(player1.Take(p1card));
                         var subGameDeckP2 = new Queue<int>(player2.Take(p2card));
 
-                        (var winningPlayer, var _) = PlayRecursiveGame(subGameDeckP1, subGameDeckP2, NewPreviousDecks);
+                        (var winningPlayer, var _) = PlayRecursiveGame(subGameDeckP1, subGameDeckP2, NewPreviousDeckHashes);
 
                         if (winningPlayer == 1)
                         {
@@ -119,9 +117,14 @@ namespace AdventOfCode2020.Days
                     CalculateScore(player1.Count > 0 ? player1 : player2));
             }
 
-            private static bool DeckHasBeenPlayedPreviously(int player, Queue<int> deckQueue, Dictionary<int, List<Queue<int>>> previousRoundDecks)
+            private static bool DeckHasBeenPlayedPreviously(int player, int deckHash, IDictionary<int, List<int>> previousRoundDecks)
             {
-                return previousRoundDecks[player].Any(x => deckQueue.SequenceEqual(x));
+                if (previousRoundDecks[player].Any(hash => hash == deckHash))
+                {
+                    return true;
+                }
+                previousRoundDecks[player].Add(deckHash);
+                return false;
             }
 
             private static bool HasCardsRemainingForSubGame(int cardValue, Queue<int> deck)
@@ -168,6 +171,19 @@ namespace AdventOfCode2020.Days
             }
 
             return (new Queue<int>(player1), new Queue<int>(player2));
+        }
+    }
+
+    public static class Day22Extensions
+    {
+        public static int GetHash<T>(this IEnumerable<T> src)
+        {
+            var hash = new HashCode();
+            foreach (var element in src)
+            {
+                hash.Add(element);
+            }
+            return hash.ToHashCode();
         }
     }
 }
