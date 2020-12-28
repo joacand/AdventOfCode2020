@@ -38,33 +38,32 @@ namespace AdventOfCode2020.Days
 
         private class Game
         {
-            private List<Tile> Tiles { get; set; } = new();
-            private Dictionary<Tile, bool> TilesToBlackSideUpMap { get; set; } = new();
+            private Dictionary<Tile, bool> TilesToBlackSideUp { get; } = new();
+            private Dictionary<Tile, int> BlackTileCounterMemoization { get; } = new();
 
-            private readonly Dictionary<Tile, int> blackTileCounterMemo = new();
+            private static readonly (int X, int Y, int Z)[] NeighborCoords =
+                new (int, int, int)[6] { (1, -1, 0), (0, -1, 1), (-1, 0, 1), (-1, 1, 0), (0, 1, -1), (1, 0, -1) };
 
             public Game()
             {
                 var referenceTile = new Tile();
-                Tiles.Add(referenceTile);
+                TilesToBlackSideUp.Add(referenceTile, false);
             }
 
             public int CountBlackTiles()
             {
-                return Tiles.Count(x => x.IsBlackTile);
+                return TilesToBlackSideUp.Count(x => x.Value);
             }
 
             public void PerformArtExhibit(int days)
             {
-                Console.WriteLine($"Day 0: {CountBlackTiles()}");
                 for (var i = 0; i < days; i++)
                 {
                     ExecuteRules();
-                    Console.WriteLine($"Day {i + 1}: {CountBlackTiles()} - Count: {Tiles.Count}");
                 }
             }
 
-            public void FlipTiles(List<string> tileMovements)
+            public void FlipTiles(IEnumerable<string> tileMovements)
             {
                 foreach (var tileMovement in tileMovements)
                 {
@@ -74,8 +73,7 @@ namespace AdventOfCode2020.Days
 
             private void FlipTile(string movements)
             {
-                var lexer = new Lexer();
-                var tokens = lexer.GetTokens(movements);
+                var tokens = Lexer.GetTokens(movements);
                 Tile tile = new();
 
                 foreach (var direction in tokens)
@@ -91,115 +89,94 @@ namespace AdventOfCode2020.Days
                     }
                 }
 
-                var ind = Tiles.IndexOf(tile);
-
-                if (ind == -1)
+                if (!TilesToBlackSideUp.ContainsKey(tile))
                 {
-                    Tiles.Add(tile);
-                    ind = Tiles.IndexOf(tile);
+                    TilesToBlackSideUp.Add(tile, false);
                 }
-                else
-                {
-                    tile = Tiles[ind];
-                }
-                tile.Flip();
-                Tiles[ind] = tile;
-                if (tile.IsBlackTile)
-                {
-                    TilesToBlackSideUpMap[tile] = true;
-                }
-                else
-                {
-                    TilesToBlackSideUpMap[tile] = false;
-                }
+                Flip(tile);
             }
 
             private void ExecuteRules()
             {
-                blackTileCounterMemo.Clear();
+                BlackTileCounterMemoization.Clear();
 
-                for (int i = 0; i < Tiles.Count; i++)
+                AddNewAdjacentTiles();
+
+                BlackTileCounterMemoization.Clear();
+
+                FlipAccordingToRules();
+            }
+
+            private void AddNewAdjacentTiles()
+            {
+                List<Tile> newTiles = new();
+                foreach (var tile in TilesToBlackSideUp.Keys)
                 {
-                    AddAdjacentTiles(Tiles[i], Tiles);
+                    AddNewAdjacentTiles(tile, newTiles);
                 }
-
-                blackTileCounterMemo.Clear();
-
-                List<int> tileIndicesToFlip = new();
-
-                for (var i = 0; i < Tiles.Count; i++)
+                foreach (var newTile in newTiles)
                 {
-                    var tile = Tiles[i];
-                    var blackAdjacentTiles = CountBlackAdjacentTiles(tile);
-
-                    if (tile.IsBlackTile)
-                    {
-                        if (blackAdjacentTiles == 0 || blackAdjacentTiles > 2)
-                        {
-                            tileIndicesToFlip.Add(i);
-                        }
-                    }
-                    else
-                    {
-                        if (blackAdjacentTiles == 2)
-                        {
-                            tileIndicesToFlip.Add(i);
-                        }
-                    }
+                    TilesToBlackSideUp.Add(newTile, false);
                 }
+            }
 
-                foreach (var ttc in tileIndicesToFlip)
+            private void AddNewAdjacentTiles(Tile tile, List<Tile> newTiles)
+            {
+                foreach (var (X, Y, Z) in NeighborCoords)
                 {
-                    Tiles[ttc] = Tiles[ttc].Flip();
-                    if (Tiles[ttc].IsBlackTile)
+                    var newTile = new Tile { X = tile.X - X, Y = tile.Y - Y, Z = tile.Z - Z };
+
+                    var adjacentBlackTiles = CountBlackAdjacentTiles(newTile);
+
+                    if (!newTiles.Contains(newTile) && !TilesToBlackSideUp.ContainsKey(newTile) && adjacentBlackTiles > 0)
                     {
-                        TilesToBlackSideUpMap[Tiles[ttc]] = true;
-                    }
-                    else
-                    {
-                        TilesToBlackSideUpMap[Tiles[ttc]] = false;
+                        newTiles.Add(newTile);
+                        BlackTileCounterMemoization[tile] = adjacentBlackTiles;
                     }
                 }
             }
 
-            private readonly (int, int, int)[] neighborCoords =
-                new (int, int, int)[6] { (1, -1, 0), (0, -1, 1), (-1, 0, 1), (-1, 1, 0), (0, 1, -1), (1, 0, -1) };
+            private void FlipAccordingToRules()
+            {
+                List<Tile> tilesToFlip = new();
+
+                foreach (var tile in TilesToBlackSideUp.Keys)
+                {
+                    var blackAdjacentTiles = CountBlackAdjacentTiles(tile);
+
+                    if ((TilesToBlackSideUp[tile] && (blackAdjacentTiles == 0 || blackAdjacentTiles > 2)) ||
+                        (!TilesToBlackSideUp[tile] && blackAdjacentTiles == 2))
+                    {
+                        tilesToFlip.Add(tile);
+                    }
+                }
+
+                foreach (var tile in tilesToFlip)
+                {
+                    Flip(tile);
+                }
+            }
 
             private int CountBlackAdjacentTiles(Tile tile)
             {
-                if (blackTileCounterMemo.ContainsKey(tile))
+                if (BlackTileCounterMemoization.ContainsKey(tile))
                 {
-                    return blackTileCounterMemo[tile];
+                    return BlackTileCounterMemoization[tile];
                 }
 
-                var adjacent = 0;
-                foreach (var neighborCoord in neighborCoords)
+                var adjacentBlackTiles = NeighborCoords.Count(neighborCoord =>
                 {
-                    var newTile = new Tile { X = tile.X - neighborCoord.Item1, Y = tile.Y - neighborCoord.Item2, Z = tile.Z - neighborCoord.Item3 };
+                    var neighborTile = new Tile { X = tile.X - neighborCoord.X, Y = tile.Y - neighborCoord.Y, Z = tile.Z - neighborCoord.Z };
+                    return TilesToBlackSideUp.ContainsKey(neighborTile) && TilesToBlackSideUp[neighborTile];
+                });
 
-                    if (TilesToBlackSideUpMap.ContainsKey(newTile) && TilesToBlackSideUpMap[newTile])
-                    {
-                        adjacent++;
-                    }
-                }
-                blackTileCounterMemo[tile] = adjacent;
-                return adjacent;
+                BlackTileCounterMemoization[tile] = adjacentBlackTiles;
+                return adjacentBlackTiles;
             }
 
-            private void AddAdjacentTiles(Tile tile, List<Tile> tiles)
+            private void Flip(Tile tile)
             {
-                foreach (var neighborCoord in neighborCoords)
-                {
-                    var newTile = new Tile { X = tile.X - neighborCoord.Item1, Y = tile.Y - neighborCoord.Item2, Z = tile.Z - neighborCoord.Item3 };
-
-                    var c = CountBlackAdjacentTiles(newTile);
-
-                    if (!tiles.Contains(newTile) && c > 0)
-                    {
-                        blackTileCounterMemo[tile] = c;
-                        tiles.Add(newTile);
-                    }
-                }
+                TilesToBlackSideUp[tile] = !TilesToBlackSideUp[tile];
             }
         }
 
@@ -208,18 +185,6 @@ namespace AdventOfCode2020.Days
             public int X { get; set; }
             public int Y { get; set; }
             public int Z { get; set; }
-            public bool IsBlackTile { get; set; }
-
-            public Tile Flip()
-            {
-                IsBlackTile = !IsBlackTile;
-                return this;
-            }
-
-            public override string ToString()
-            {
-                return $"X:{X} Y:{Y} Z{Z} - Black tile:{IsBlackTile}";
-            }
 
             public override int GetHashCode()
             {
@@ -239,6 +204,45 @@ namespace AdventOfCode2020.Days
             }
         }
 
+        private static class Lexer
+        {
+            public static List<Direction> GetTokens(string input)
+            {
+                List<Direction> directions = new();
+
+                for (var currentIndex = 0; currentIndex < input.Length; currentIndex++)
+                {
+                    directions.Add(GetToken(input, ref currentIndex));
+                }
+
+                return directions;
+            }
+
+            private static Direction GetToken(string input, ref int index)
+            {
+                return (input[index]) switch
+                {
+                    'n' => input[++index] switch
+                    {
+                        'e' => Direction.NE,
+                        'w' => Direction.NW,
+                        _ => throw new Exception(),
+                    },
+                    's' => input[++index] switch
+                    {
+                        'e' => Direction.SE,
+                        'w' => Direction.SW,
+                        _ => throw new Exception(),
+                    },
+                    'e' => Direction.E,
+                    'w' => Direction.W,
+                    _ => throw new Exception(),
+                };
+            }
+        }
+
+        private record Token(Direction Direction);
+
         private enum Direction
         {
             E,
@@ -247,89 +251,6 @@ namespace AdventOfCode2020.Days
             SE,
             SW,
             NW
-        }
-
-        private record Token(Direction Direction);
-
-        private class Lexer
-        {
-            public List<Direction> GetTokens(string input)
-            {
-                List<Direction> directions = new();
-                var currentIndex = 0;
-
-                while (currentIndex < input.Length)
-                {
-                    directions.Add(GetToken(input, ref currentIndex));
-                    currentIndex++;
-                }
-
-                return directions;
-            }
-
-            private static Direction GetToken(string input, ref int currentIndex)
-            {
-                var c = input[currentIndex];
-                switch (c)
-                {
-                    case 'n':
-                        {
-                            var peekIndex = currentIndex + 1;
-
-                            if (peekIndex < input.Length)
-                            {
-                                var csnd = input[peekIndex];
-                                switch (csnd)
-                                {
-                                    case 'e':
-                                        {
-                                            currentIndex = peekIndex;
-                                            return Direction.NE;
-                                        }
-                                    case 'w':
-                                        {
-                                            currentIndex = peekIndex;
-                                            return Direction.NW;
-                                        }
-                                }
-                            }
-                            throw new Exception();
-                        }
-                    case 's':
-                        {
-                            var peekIndex = currentIndex + 1;
-
-                            if (peekIndex < input.Length)
-                            {
-                                var csnd = input[peekIndex];
-                                switch (csnd)
-                                {
-                                    case 'e':
-                                        {
-                                            currentIndex = peekIndex;
-                                            return Direction.SE;
-                                        }
-                                    case 'w':
-                                        {
-                                            currentIndex = peekIndex;
-                                            return Direction.SW;
-                                        }
-                                }
-                            }
-                            throw new Exception();
-                        }
-                    case 'e':
-                        {
-                            return Direction.E;
-                        }
-                    case 'w':
-                        {
-                            return Direction.W;
-                        }
-                    default:
-                        throw new Exception();
-                }
-            }
         }
     }
 }
