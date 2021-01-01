@@ -6,4 +6,6 @@ https://adventofcode.com/2020
 
 ---
 
-![alt tag](https://i.imgur.com/idSG9Pr.png "Stars completed")
+| ![starscompleted.png](https://i.imgur.com/idSG9Pr.png) | ![seamonsters.png](https://i.imgur.com/BChEzTr.png) |
+|:--:|:--:| 
+| *Stars completed* | *Bonus for Day 20 part 2 - visualization of sea monsters* |
